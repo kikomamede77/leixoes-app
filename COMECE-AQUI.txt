@@ -1,0 +1,88 @@
+╔════════════════════════════════════════════════════════════╗
+║   🚀 LEIXÕES GESTOR DE EQUIPAS - COMECE AQUI 🚀          ║
+║     Aplicação Web Profissional com Firebase + React       ║
+╚════════════════════════════════════════════════════════════╝
+
+📋 FICHEIROS FORNECIDOS:
+────────────────────────────────────────────────────────────
+
+1. README.md                 ← Resumo geral
+2. GUIA-INSTALACAO.md        ← Instruções passo-a-passo (LEIA ISTO!)
+3. ESTRUTURA-PROJETO.md      ← Como está organizado
+4. App.jsx                   ← Código principal (copie para src/)
+5. App.css                   ← Estilos (copie para src/)
+6. firebase.js               ← Configuração Firebase (copie para src/)
+7. package.json              ← Dependências (copie para raiz)
+8. vite.config.js            ← Configuração Vite (copie para raiz)
+9. index.html                ← HTML (copie para raiz)
+10. main.jsx                 ← Entrada app (copie para src/)
+
+────────────────────────────────────────────────────────────
+
+⚡ 3 PASSOS RÁPIDOS:
+
+PASSO 1: Firebase Setup (5 min)
+────────────────────────────────────────────────────────────
+1. Vá a https://console.firebase.google.com
+2. Clique "Criar Projeto" → nome: leixoes-gestor-equipas
+3. Ative Authentication (Email/Senha)
+4. Ative Firestore Database (Modo teste)
+5. Copie credenciais → cole em firebase.js
+
+PASSO 2: Instalar App (5 min)
+────────────────────────────────────────────────────────────
+1. Terminal: npm create vite@latest leixoes-app -- --template react
+2. cd leixoes-app
+3. npm install
+4. npm install firebase react-router-dom
+5. Copie os ficheiros fornecidos para as pastas corretas
+
+PASSO 3: Deploy (2 min)
+────────────────────────────────────────────────────────────
+1. npm run build
+2. npm i -g vercel
+3. vercel
+
+Pronto! App online em URL tipo: leixoes-app.vercel.app ✅
+
+────────────────────────────────────────────────────────────
+
+🎯 O QUE FICA ONLINE:
+
+✅ Login/Signup (cria conta automaticamente)
+✅ Adicionar Equipas LSC
+✅ Adicionar Recrutas
+✅ Dados em tempo real (sincronizados)
+✅ Multi-utilizador (vários staff simultâneo)
+✅ Grátis para sempre (Firebase é grátis)
+✅ Responsivo (funciona em telemóvel)
+
+────────────────────────────────────────────────────────────
+
+📞 PRÓXIMOS PASSOS:
+
+1. Leia o ficheiro: GUIA-INSTALACAO.md
+2. Siga os 3 passos acima
+3. Teste em http://localhost:5173
+4. Deploy em Vercel
+5. Partilhe URL com seu staff 🎉
+
+────────────────────────────────────────────────────────────
+
+💡 DICAS:
+
+- Firebase é completamente grátis (125k reads/dia)
+- Todos os dados são guardados na nuvem
+- Sem instalação necessária (acessa por browser)
+- Suporta centenas de utilizadores
+- Acesso 24/7 de qualquer lugar
+
+────────────────────────────────────────────────────────────
+
+❓ DÚVIDAS?
+
+Leia GUIA-INSTALACAO.md → tem respostas para 90% de problemas
+
+────────────────────────────────────────────────────────────
+
+Boa sorte! 🚀 Seu clube vai adorar! ⚽
