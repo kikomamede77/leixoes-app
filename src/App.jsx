@@ -76,27 +76,29 @@ function App() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showRecruitModal, setShowRecruitModal] = useState(false);
   const [showMeetingModal, setShowMeetingModal] = useState(false);
-  const [newShadowTeamName, setNewShadowTeamName] = useState('');
-  const [showAddShadowModal, setShowAddShadowModal] = useState(false);
+  const [showAddAthleteModal, setShowAddAthleteModal] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [allUsers, setAllUsers] = useState([]);
   const [invites, setInvites] = useState([]);
   const [newInviteEmail, setNewInviteEmail] = useState('');
+  const [athletesToAdd, setAthletesToAdd] = useState([]);
+  const [selectedAthlete, setSelectedAthlete] = useState(null);
+
+  const defaultShadowTeams = [
+    { id: 'shadow_1', name: 'Sub 19 - 26/27', players: [] },
+    { id: 'shadow_2', name: 'Sub 17 - 26/27', players: [] },
+    { id: 'shadow_3', name: 'Sub 16.1 - 26/27', players: [] },
+    { id: 'shadow_4', name: 'Sub 16.2 - 26/27', players: [] },
+    { id: 'shadow_5', name: 'Sub 15.1 - 26/27', players: [] },
+    { id: 'shadow_6', name: 'Sub 15.2 - 26/27', players: [] },
+    { id: 'shadow_7', name: 'Sub 14.1 - 26/27', players: [] },
+    { id: 'shadow_8', name: 'Sub 14.2 - 26/27', players: [] },
+    { id: 'shadow_9', name: 'Sub 13.1 - 26/27', players: [] },
+    { id: 'shadow_10', name: 'Sub 13.2 - 26/27', players: [] },
+    { id: 'shadow_11', name: 'Sub 12.1 - 26/27', players: [] }
+  ];
 
   const initShadowTeams = () => {
-    const defaultShadowTeams = [
-      { id: 'shadow_1', name: 'Sub 19 - 26/27', players: [] },
-      { id: 'shadow_2', name: 'Sub 17 - 26/27', players: [] },
-      { id: 'shadow_3', name: 'Sub 16.1 - 26/27', players: [] },
-      { id: 'shadow_4', name: 'Sub 16.2 - 26/27', players: [] },
-      { id: 'shadow_5', name: 'Sub 15.1 - 26/27', players: [] },
-      { id: 'shadow_6', name: 'Sub 15.2 - 26/27', players: [] },
-      { id: 'shadow_7', name: 'Sub 14.1 - 26/27', players: [] },
-      { id: 'shadow_8', name: 'Sub 14.2 - 26/27', players: [] },
-      { id: 'shadow_9', name: 'Sub 13.1 - 26/27', players: [] },
-      { id: 'shadow_10', name: 'Sub 13.2 - 26/27', players: [] },
-      { id: 'shadow_11', name: 'Sub 12.1 - 26/27', players: [] }
-    ];
     setShadowTeams(defaultShadowTeams);
   };
 
@@ -104,17 +106,67 @@ function App() {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
-        setIsAdmin(currentUser.email === ADMIN_EMAIL);
+        checkIfAdmin(currentUser.email);
         loadTeams();
         loadRecruits();
         loadMeetings();
         loadUsers();
         loadInvites();
         initShadowTeams();
+        buildAthletesList();
       }
     });
     return unsubscribe;
   }, []);
+
+  useEffect(() => {
+    if (teams.length > 0 || recruits.length > 0) {
+      buildAthletesList();
+    }
+  }, [teams, recruits]);
+
+  const checkIfAdmin = async (userEmail) => {
+    try {
+      const adminSnap = await getDocs(query(collection(db, 'admins'), where('email', '==', userEmail)));
+      setIsAdmin(!adminSnap.empty || userEmail === ADMIN_EMAIL);
+    } catch (error) {
+      console.log('Erro ao verificar admin:', error);
+    }
+  };
+
+  const buildAthletesList = () => {
+    const athletesList = [];
+    
+    teams.forEach(team => {
+      (team.players || []).forEach(player => {
+        athletesList.push({
+          id: player.id,
+          name: player.name,
+          type: 'LSC',
+          team: team.name,
+          position: player.position,
+          status: player.status,
+          birthYear: player.birthYear,
+          contact: player.contact
+        });
+      });
+    });
+
+    recruits.forEach(recruit => {
+      athletesList.push({
+        id: recruit.id,
+        name: recruit.name,
+        type: 'Recruta',
+        team: recruit.club,
+        position: recruit.position,
+        status: recruit.status,
+        birthYear: recruit.birthYear,
+        contact: recruit.contact
+      });
+    });
+
+    setAthletesToAdd(athletesList);
+  };
 
   const loadTeams = () => {
     const q = query(collection(db, 'teams'));
@@ -296,7 +348,7 @@ function App() {
     try {
       await addDoc(collection(db, 'recruits'), {
         name, birthYear: parseInt(birthYear), status, club, position: position || '',
-        contact: '', alternativePosition: '', dominantFoot: '', shadowTeam: '',
+        contact: '', notes: '', alternativePosition: '', dominantFoot: '', shadowTeam: '',
         createdAt: new Date()
       });
       e.target.reset();
@@ -383,6 +435,68 @@ function App() {
         alert('Erro: ' + error.message);
       }
     }
+  };
+
+  const promoteToAdmin = async (userId, userEmail) => {
+    if (confirm(`Promover ${userEmail} a Admin?`)) {
+      try {
+        await addDoc(collection(db, 'admins'), { email: userEmail, userId, createdAt: new Date() });
+        await checkIfAdmin(userEmail);
+        loadUsers();
+        alert('Utilizador promovido a Admin!');
+      } catch (error) {
+        alert('Erro: ' + error.message);
+      }
+    }
+  };
+
+  const removeAdmin = async (userEmail) => {
+    if (confirm(`Remover ${userEmail} de Admin?`)) {
+      try {
+        const adminSnap = await getDocs(query(collection(db, 'admins'), where('email', '==', userEmail)));
+        if (!adminSnap.empty) {
+          await deleteDoc(doc(db, 'admins', adminSnap.docs[0].id));
+          loadUsers();
+          alert('Utilizador removido de Admin!');
+        }
+      } catch (error) {
+        alert('Erro: ' + error.message);
+      }
+    }
+  };
+
+  const addAthleteShadowTeam = async (shadowTeamId, athlete) => {
+    try {
+      const team = shadowTeams.find(t => t.id === shadowTeamId);
+      const newPlayer = {
+        id: `${athlete.id}_${Date.now()}`,
+        name: athlete.name,
+        type: athlete.type,
+        position: athlete.position,
+        status: athlete.status,
+        birthYear: athlete.birthYear,
+        originalTeam: athlete.team
+      };
+      const updatedPlayers = [...(team.players || []), newPlayer];
+      const updatedShadowTeams = shadowTeams.map(t => 
+        t.id === shadowTeamId ? {...t, players: updatedPlayers} : t
+      );
+      setShadowTeams(updatedShadowTeams);
+      setShowAddAthleteModal(false);
+      setSelectedAthlete(null);
+      alert(`${athlete.name} adicionado a ${team.name}!`);
+    } catch (error) {
+      alert('Erro: ' + error.message);
+    }
+  };
+
+  const removeAthleteShadowTeam = (shadowTeamId, athleteId) => {
+    const team = shadowTeams.find(t => t.id === shadowTeamId);
+    const updatedPlayers = team.players.filter(p => p.id !== athleteId);
+    const updatedShadowTeams = shadowTeams.map(t => 
+      t.id === shadowTeamId ? {...t, players: updatedPlayers} : t
+    );
+    setShadowTeams(updatedShadowTeams);
   };
 
   const countRenovados = (players) => {
@@ -508,31 +622,37 @@ function App() {
             </form>
 
             <h3>Convites Enviados</h3>
-            <div className="recruits-list">
+            <div className="compact-list">
               {invites.map(invite => (
-                <div key={invite.id} className="recruit-card">
+                <div key={invite.id} className="compact-card">
                   <div>
-                    <h4>{invite.email}</h4>
-                    <p>Código: <strong>{invite.code}</strong></p>
-                    <p>{invite.used ? `✅ Usado por ${invite.usedBy}` : '⏳ Pendente'}</p>
+                    <p><strong>{invite.email}</strong></p>
+                    <p className="compact-text">Código: {invite.code}</p>
+                    <p className="compact-text">{invite.used ? `✅ Usado por ${invite.usedBy}` : '⏳ Pendente'}</p>
                   </div>
-                  {!invite.used && <button className="btn-delete-small" onClick={() => revokeInvite(invite.id)}>revogar</button>}
+                  {!invite.used && <button className="btn-small" onClick={() => revokeInvite(invite.id)}>revogar</button>}
                 </div>
               ))}
             </div>
 
             <h3>Utilizadores Registados</h3>
-            <div className="recruits-list">
-              {allUsers.map(u => (
-                <div key={u.id} className="recruit-card">
-                  <div>
-                    <h4>{u.email}</h4>
-                    <p>{u.active ? '✅ Ativo' : '❌ Desativado'}</p>
-                    <p>Data: {new Date(u.createdAt?.toDate?.()).toLocaleDateString('pt-PT')}</p>
+            <div className="compact-list">
+              {allUsers.map(u => {
+                const isUserAdmin = u.email === ADMIN_EMAIL;
+                return (
+                  <div key={u.id} className="compact-card">
+                    <div>
+                      <p><strong>{u.email}</strong></p>
+                      <p className="compact-text">{u.active ? '✅ Ativo' : '❌ Desativado'} {isUserAdmin ? '👑 Admin' : ''}</p>
+                    </div>
+                    <div className="admin-actions">
+                      {!isUserAdmin && u.active && <button className="btn-small" onClick={() => promoteToAdmin(u.id, u.email)}>promover</button>}
+                      {isUserAdmin && user.email === ADMIN_EMAIL && <button className="btn-small btn-danger" onClick={() => removeAdmin(u.email)}>remover</button>}
+                      {u.active && <button className="btn-small btn-danger" onClick={() => deactivateUser(u.id)}>desativar</button>}
+                    </div>
                   </div>
-                  {u.active && <button className="btn-delete-small" onClick={() => deactivateUser(u.id)}>desativar</button>}
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             <div className="slogan">Tradição. Orgulho. Sentimento.</div>
@@ -597,18 +717,20 @@ function App() {
 
                 {renderFormation(teams.find(t => t.id === currentTeamId).players || [])}
 
-                <div className="players-list">
+                <div className="players-compact">
                   <h3>Lista de Jogadores</h3>
-                  {(teams.find(t => t.id === currentTeamId).players || []).map(player => (
-                    <div key={player.id} className="player-item" onClick={() => { setEditingPlayer({...player, teamId: currentTeamId}); setShowEditModal(true); }}>
-                      <div style={{cursor: 'pointer', flex: 1}}>
-                        <strong>{player.name}</strong>
-                        <p>{positions[player.position]}</p>
-                        <span className="status-badge" style={{background: renewalStates[player.status]?.color}}>{renewalStates[player.status]?.label}</span>
+                  <div className="compact-list">
+                    {(teams.find(t => t.id === currentTeamId).players || []).map(player => (
+                      <div key={player.id} className="compact-card" onClick={() => { setEditingPlayer({...player, teamId: currentTeamId}); setShowEditModal(true); }} style={{cursor: 'pointer'}}>
+                        <div>
+                          <p><strong>{player.name}</strong></p>
+                          <p className="compact-text">{positions[player.position]}</p>
+                          <span className="status-badge" style={{background: renewalStates[player.status]?.color}}>{renewalStates[player.status]?.label}</span>
+                        </div>
+                        <button className="btn-small btn-danger" onClick={(e) => { e.stopPropagation(); deletePlayer(currentTeamId, player.id); }}>✕</button>
                       </div>
-                      <button className="btn-delete-small" onClick={(e) => { e.stopPropagation(); deletePlayer(currentTeamId, player.id); }}>eliminar</button>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               </>
             )}
@@ -682,15 +804,15 @@ function App() {
             <button className="back-btn" onClick={() => setRecruitmentFilter(null)}>← Voltar</button>
             <h2>Recrutamento - {recruitmentStates[recruitmentFilter].label}</h2>
             
-            <div className="recruits-list">
+            <div className="compact-list">
               {recruits.filter(r => r.status === recruitmentFilter).map(recruit => (
-                <div key={recruit.id} className="recruit-card" onClick={() => { setEditingRecruit(recruit); setShowRecruitModal(true); }} style={{cursor: 'pointer'}}>
+                <div key={recruit.id} className="compact-card" onClick={() => { setEditingRecruit(recruit); setShowRecruitModal(true); }} style={{cursor: 'pointer'}}>
                   <div>
-                    <h4>{recruit.name}</h4>
-                    <p>{recruit.birthYear} • {recruit.club} • {positions[recruit.position] || '-'}</p>
+                    <p><strong>{recruit.name}</strong></p>
+                    <p className="compact-text">{recruit.birthYear} • {recruit.club} • {positions[recruit.position] || '-'}</p>
                     <span className="status-badge" style={{background: recruitmentStates[recruit.status]?.color}}>{recruitmentStates[recruit.status]?.label}</span>
                   </div>
-                  <button className="btn-delete-small" onClick={(e) => { e.stopPropagation(); deleteDoc(doc(db, 'recruits', recruit.id)); }}>eliminar</button>
+                  <button className="btn-small btn-danger" onClick={(e) => { e.stopPropagation(); deleteDoc(doc(db, 'recruits', recruit.id)); }}>✕</button>
                 </div>
               ))}
             </div>
@@ -706,15 +828,15 @@ function App() {
             {renderFormation(recruits.filter(r => r.birthYear === currentYear))}
 
             <h3 style={{marginTop: '30px'}}>Lista de Recrutas {currentYear}</h3>
-            <div className="recruits-list">
+            <div className="compact-list">
               {recruits.filter(r => r.birthYear === currentYear).map(recruit => (
-                <div key={recruit.id} className="recruit-card" onClick={() => { setEditingRecruit(recruit); setShowRecruitModal(true); }} style={{cursor: 'pointer'}}>
+                <div key={recruit.id} className="compact-card" onClick={() => { setEditingRecruit(recruit); setShowRecruitModal(true); }} style={{cursor: 'pointer'}}>
                   <div>
-                    <h4>{recruit.name}</h4>
-                    <p>{recruit.birthYear} • {recruit.club} • {positions[recruit.position] || '-'}</p>
+                    <p><strong>{recruit.name}</strong></p>
+                    <p className="compact-text">{recruit.birthYear} • {recruit.club} • {positions[recruit.position] || '-'}</p>
                     <span className="status-badge" style={{background: recruitmentStates[recruit.status]?.color}}>{recruitmentStates[recruit.status]?.label}</span>
                   </div>
-                  <button className="btn-delete-small" onClick={(e) => { e.stopPropagation(); deleteDoc(doc(db, 'recruits', recruit.id)); }}>eliminar</button>
+                  <button className="btn-small btn-danger" onClick={(e) => { e.stopPropagation(); deleteDoc(doc(db, 'recruits', recruit.id)); }}>✕</button>
                 </div>
               ))}
             </div>
@@ -727,8 +849,14 @@ function App() {
             <div className="modal-box" onClick={(e) => e.stopPropagation()}>
               <h3>Editar Recruta</h3>
               <form onSubmit={(e) => { e.preventDefault(); updateRecruit(editingRecruit.id, editingRecruit); }}>
-                <input value={editingRecruit.name} onChange={(e) => setEditingRecruit({...editingRecruit, name: e.target.value})} placeholder="Nome" />
+                <input value={editingRecruit.name} onChange={(e) => setEditingRecruit({...editingRecruit, name: e.target.value})} placeholder="Nome" required />
                 <input type="number" value={editingRecruit.birthYear || ''} onChange={(e) => setEditingRecruit({...editingRecruit, birthYear: parseInt(e.target.value)})} placeholder="Ano de Nascimento" />
+                <select value={editingRecruit.status || ''} onChange={(e) => setEditingRecruit({...editingRecruit, status: e.target.value})} required>
+                  <option value="">Selecione Estado</option>
+                  {Object.entries(recruitmentStates).map(([key, val]) => (<option key={key} value={key}>{val.label}</option>))}
+                </select>
+                <input value={editingRecruit.contact || ''} onChange={(e) => setEditingRecruit({...editingRecruit, contact: e.target.value})} placeholder="Contacto" />
+                <textarea value={editingRecruit.notes || ''} onChange={(e) => setEditingRecruit({...editingRecruit, notes: e.target.value})} placeholder="Notas" rows="3"></textarea>
                 <button type="submit">Guardar</button>
               </form>
               <button className="modal-close" onClick={() => setShowRecruitModal(false)}>Fechar</button>
@@ -748,6 +876,53 @@ function App() {
                 </div>
               ))}
             </div>
+            <div className="slogan">Tradição. Orgulho. Sentimento.</div>
+          </div>
+        )}
+
+        {activeTab === 'sombra' && currentShadowTeamId && (
+          <div>
+            <button className="back-btn" onClick={() => setCurrentShadowTeamId(null)}>← Voltar</button>
+            {shadowTeams.find(t => t.id === currentShadowTeamId) && (
+              <>
+                <h2>{shadowTeams.find(t => t.id === currentShadowTeamId).name}</h2>
+                <button className="btn-open" onClick={() => setShowAddAthleteModal(true)}>+ Adicionar Atleta</button>
+
+                {showAddAthleteModal && (
+                  <div className="modal-overlay" onClick={() => setShowAddAthleteModal(false)}>
+                    <div className="modal-box modal-large" onClick={(e) => e.stopPropagation()}>
+                      <h3>Adicionar Atleta a {shadowTeams.find(t => t.id === currentShadowTeamId).name}</h3>
+                      <div className="athletes-list">
+                        {athletesToAdd.map(athlete => (
+                          <div key={athlete.id} className="compact-card" onClick={() => addAthleteShadowTeam(currentShadowTeamId, athlete)}>
+                            <div style={{cursor: 'pointer', flex: 1}}>
+                              <p><strong>{athlete.name}</strong></p>
+                              <p className="compact-text">{athlete.type} • {athlete.birthYear} • {athlete.team}</p>
+                              <p className="compact-text">{positions[athlete.position] || '-'}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <button className="modal-close" onClick={() => setShowAddAthleteModal(false)}>Fechar</button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="compact-list" style={{marginTop: '20px'}}>
+                  <h3>Atletas na Equipa</h3>
+                  {(shadowTeams.find(t => t.id === currentShadowTeamId).players || []).map(player => (
+                    <div key={player.id} className="compact-card">
+                      <div>
+                        <p><strong>{player.name}</strong></p>
+                        <p className="compact-text">{player.type} • {player.birthYear} • {player.originalTeam}</p>
+                        <p className="compact-text">{positions[player.position] || '-'}</p>
+                      </div>
+                      <button className="btn-small btn-danger" onClick={() => removeAthleteShadowTeam(currentShadowTeamId, player.id)}>✕</button>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
             <div className="slogan">Tradição. Orgulho. Sentimento.</div>
           </div>
         )}
@@ -773,16 +948,16 @@ function App() {
               <button type="submit">+ Agendar Reunião</button>
             </form>
 
-            <div className="meetings-list">
+            <div className="compact-list" style={{marginTop: '20px'}}>
               <h3>Reuniões Agendadas</h3>
               {meetings.filter(m => m.status === 'agendada').map(meeting => (
-                <div key={meeting.id} className="meeting-card" onClick={() => { setEditingMeeting(meeting); setShowMeetingModal(true); }} style={{cursor: 'pointer'}}>
+                <div key={meeting.id} className="compact-card" onClick={() => { setEditingMeeting(meeting); setShowMeetingModal(true); }} style={{cursor: 'pointer'}}>
                   <div>
-                    <strong>{new Date(meeting.date).toLocaleDateString('pt-PT')} às {meeting.time}</strong>
-                    <p>👤 {meeting.playerName} ({meeting.birthYear}) - {positions[meeting.position]}</p>
-                    <p>📍 {meeting.location === 'estadio-mar' ? 'Estádio do Mar' : 'Complexo Óscar Marques'}</p>
+                    <p><strong>{new Date(meeting.date).toLocaleDateString('pt-PT')} às {meeting.time}</strong></p>
+                    <p className="compact-text">👤 {meeting.playerName} ({meeting.birthYear}) - {positions[meeting.position]}</p>
+                    <p className="compact-text">📍 {meeting.location === 'estadio-mar' ? 'Estádio do Mar' : 'Complexo Óscar Marques'}</p>
                   </div>
-                  <button className="btn-delete-small" onClick={(e) => { e.stopPropagation(); deleteDoc(doc(db, 'meetings', meeting.id)); }}>eliminar</button>
+                  <button className="btn-small btn-danger" onClick={(e) => { e.stopPropagation(); deleteDoc(doc(db, 'meetings', meeting.id)); }}>✕</button>
                 </div>
               ))}
             </div>
