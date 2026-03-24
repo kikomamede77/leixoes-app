@@ -14,7 +14,8 @@ import {
   doc, 
   query, 
   where,
-  onSnapshot 
+  onSnapshot,
+  getDocs
 } from 'firebase/firestore';
 import './App.css';
 
@@ -26,17 +27,10 @@ const LeixoesLogo = ({ size = 50 }) => (
 );
 
 const positions = {
-  'GR': 'Guarda-Redes',
-  'DD': 'Defesa Direito',
-  'DCD': 'Defesa Centro Direito',
-  'DCE': 'Defesa Centro Esquerdo',
-  'DE': 'Defesa Esquerdo',
-  'MD': 'Médio Defensivo',
-  'MC': 'Médio Centro',
-  'MO': 'Médio Ofensivo',
-  'ED': 'Extremo Direito',
-  'EE': 'Extremo Esquerdo',
-  'PL': 'Ponta de Lança'
+  'GR': 'Guarda-Redes', 'DD': 'Defesa Direito', 'DCD': 'Defesa Centro Direito',
+  'DCE': 'Defesa Centro Esquerdo', 'DE': 'Defesa Esquerdo', 'MD': 'Médio Defensivo',
+  'MC': 'Médio Centro', 'MO': 'Médio Ofensivo', 'ED': 'Extremo Direito',
+  'EE': 'Extremo Esquerdo', 'PL': 'Ponta de Lança'
 };
 
 const renewalStates = {
@@ -58,10 +52,13 @@ const recruitmentStates = {
   'rejeitou': { label: 'Rejeitou', color: '#c41e3a' }
 };
 
+const ADMIN_EMAIL = 'kikomamede77@gmail.com';
+
 function App() {
   const [user, setUser] = useState(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [inviteCode, setInviteCode] = useState('');
   const [isLogin, setIsLogin] = useState(true);
   const [activeTab, setActiveTab] = useState('equipas');
   const [teams, setTeams] = useState([]);
@@ -81,6 +78,10 @@ function App() {
   const [showMeetingModal, setShowMeetingModal] = useState(false);
   const [newShadowTeamName, setNewShadowTeamName] = useState('');
   const [showAddShadowModal, setShowAddShadowModal] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [allUsers, setAllUsers] = useState([]);
+  const [invites, setInvites] = useState([]);
+  const [newInviteEmail, setNewInviteEmail] = useState('');
 
   const initShadowTeams = () => {
     const defaultShadowTeams = [
@@ -103,34 +104,59 @@ function App() {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
-        loadTeams(currentUser.uid);
-        loadRecruits(currentUser.uid);
-        loadMeetings(currentUser.uid);
+        setIsAdmin(currentUser.email === ADMIN_EMAIL);
+        loadTeams();
+        loadRecruits();
+        loadMeetings();
+        loadUsers();
+        loadInvites();
         initShadowTeams();
       }
     });
     return unsubscribe;
   }, []);
 
-  const loadTeams = (userId) => {
-    const q = query(collection(db, 'teams'), where('userId', '==', userId));
+  const loadTeams = () => {
+    const q = query(collection(db, 'teams'));
     onSnapshot(q, (snapshot) => {
       setTeams(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
   };
 
-  const loadRecruits = (userId) => {
-    const q = query(collection(db, 'recruits'), where('userId', '==', userId));
+  const loadRecruits = () => {
+    const q = query(collection(db, 'recruits'));
     onSnapshot(q, (snapshot) => {
       setRecruits(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
   };
 
-  const loadMeetings = (userId) => {
-    const q = query(collection(db, 'meetings'), where('userId', '==', userId));
+  const loadMeetings = () => {
+    const q = query(collection(db, 'meetings'));
     onSnapshot(q, (snapshot) => {
       setMeetings(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
+  };
+
+  const loadUsers = async () => {
+    try {
+      const snapshot = await getDocs(collection(db, 'users'));
+      setAllUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    } catch (error) {
+      console.log('Erro ao carregar users:', error);
+    }
+  };
+
+  const loadInvites = async () => {
+    try {
+      const snapshot = await getDocs(collection(db, 'invites'));
+      setInvites(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    } catch (error) {
+      console.log('Erro ao carregar convites:', error);
+    }
+  };
+
+  const generateInviteCode = () => {
+    return Math.random().toString(36).substring(2, 15).toUpperCase();
   };
 
   const handleAuth = async (e) => {
@@ -140,10 +166,40 @@ function App() {
       if (isLogin) {
         await signInWithEmailAndPassword(auth, email, password);
       } else {
-        await createUserWithEmailAndPassword(auth, email, password);
+        if (!inviteCode) {
+          alert('Código de convite é obrigatório!');
+          setLoading(false);
+          return;
+        }
+
+        const inviteSnap = await getDocs(query(collection(db, 'invites'), where('code', '==', inviteCode)));
+        if (inviteSnap.empty) {
+          alert('Código de convite inválido!');
+          setLoading(false);
+          return;
+        }
+
+        const invite = inviteSnap.docs[0].data();
+        if (invite.used) {
+          alert('Este código de convite já foi utilizado!');
+          setLoading(false);
+          return;
+        }
+
+        const userCred = await createUserWithEmailAndPassword(auth, email, password);
+        
+        await addDoc(collection(db, 'users'), {
+          uid: userCred.user.uid,
+          email: email,
+          createdAt: new Date(),
+          active: true
+        });
+
+        await updateDoc(doc(db, 'invites', inviteSnap.docs[0].id), { used: true, usedBy: email, usedAt: new Date() });
       }
       setEmail('');
       setPassword('');
+      setInviteCode('');
     } catch (error) {
       alert('Erro: ' + error.message);
     }
@@ -165,7 +221,6 @@ function App() {
     const category = e.target.teamCategory?.value;
     try {
       await addDoc(collection(db, 'teams'), {
-        userId: user.uid,
         name,
         category,
         players: [],
@@ -186,14 +241,8 @@ function App() {
       const team = teams.find(t => t.id === teamId);
       const newPlayer = {
         id: `player_${Date.now()}`,
-        name,
-        position,
-        status,
-        contact: '',
-        alternativePosition: '',
-        birthYear: '',
-        dominantFoot: '',
-        shadowTeam: ''
+        name, position, status,
+        contact: '', alternativePosition: '', birthYear: '', dominantFoot: '', shadowTeam: ''
       };
       await updateDoc(doc(db, 'teams', teamId), {
         players: [...(team.players || []), newPlayer]
@@ -207,9 +256,7 @@ function App() {
   const updatePlayer = async (teamId, playerId, updatedData) => {
     try {
       const team = teams.find(t => t.id === teamId);
-      const updatedPlayers = team.players.map(p => 
-        p.id === playerId ? { ...p, ...updatedData } : p
-      );
+      const updatedPlayers = team.players.map(p => p.id === playerId ? { ...p, ...updatedData } : p);
       await updateDoc(doc(db, 'teams', teamId), { players: updatedPlayers });
       setShowEditModal(false);
       setEditingPlayer(null);
@@ -248,16 +295,8 @@ function App() {
     const position = e.target.recruitPosition?.value;
     try {
       await addDoc(collection(db, 'recruits'), {
-        userId: user.uid,
-        name,
-        birthYear: parseInt(birthYear),
-        status,
-        club,
-        position: position || '',
-        contact: '',
-        alternativePosition: '',
-        dominantFoot: '',
-        shadowTeam: '',
+        name, birthYear: parseInt(birthYear), status, club, position: position || '',
+        contact: '', alternativePosition: '', dominantFoot: '', shadowTeam: '',
         createdAt: new Date()
       });
       e.target.reset();
@@ -286,15 +325,8 @@ function App() {
     const location = e.target.meetingLocation?.value;
     try {
       await addDoc(collection(db, 'meetings'), {
-        userId: user.uid,
-        playerName,
-        birthYear,
-        position,
-        date,
-        time,
-        location,
-        status: 'agendada',
-        createdAt: new Date()
+        playerName, birthYear, position, date, time, location,
+        status: 'agendada', createdAt: new Date()
       });
       e.target.reset();
     } catch (error) {
@@ -312,46 +344,45 @@ function App() {
     }
   };
 
-  const addShadowTeam = async (e) => {
+  const sendInvite = async (e) => {
     e.preventDefault();
-    if (!newShadowTeamName) return;
-    const newTeam = {
-      id: `shadow_${Date.now()}`,
-      name: newShadowTeamName,
-      players: []
-    };
-    setShadowTeams([...shadowTeams, newTeam]);
-    setNewShadowTeamName('');
-    setShowAddShadowModal(false);
-  };
-
-  const removeShadowTeam = (teamId) => {
-    if (confirm('Eliminar esta equipa sombra?')) {
-      setShadowTeams(shadowTeams.filter(t => t.id !== teamId));
+    if (!newInviteEmail) return;
+    try {
+      const code = generateInviteCode();
+      await addDoc(collection(db, 'invites'), {
+        email: newInviteEmail,
+        code: code,
+        createdAt: new Date(),
+        used: false
+      });
+      alert(`Convite criado! Código: ${code}\nEnviar para: ${newInviteEmail}`);
+      setNewInviteEmail('');
+      loadInvites();
+    } catch (error) {
+      alert('Erro: ' + error.message);
     }
   };
 
-  const addPlayerToShadowTeam = async (e, shadowTeamId) => {
-    e.preventDefault();
-    const name = e.target.shadowPlayerName?.value;
-    const position = e.target.shadowPlayerPosition?.value;
-    const status = e.target.shadowPlayerStatus?.value;
-    const newPlayer = {
-      id: `shadow_player_${Date.now()}`,
-      name,
-      position,
-      status,
-      contact: '',
-      alternativePosition: '',
-      birthYear: '',
-      dominantFoot: ''
-    };
-    setShadowTeams(shadowTeams.map(team => 
-      team.id === shadowTeamId 
-        ? { ...team, players: [...(team.players || []), newPlayer] }
-        : team
-    ));
-    e.target.reset();
+  const revokeInvite = async (inviteId) => {
+    if (confirm('Revogar este convite?')) {
+      try {
+        await deleteDoc(doc(db, 'invites', inviteId));
+        loadInvites();
+      } catch (error) {
+        alert('Erro: ' + error.message);
+      }
+    }
+  };
+
+  const deactivateUser = async (userId) => {
+    if (confirm('Desativar este utilizador?')) {
+      try {
+        await updateDoc(doc(db, 'users', userId), { active: false });
+        loadUsers();
+      } catch (error) {
+        alert('Erro: ' + error.message);
+      }
+    }
   };
 
   const countRenovados = (players) => {
@@ -430,6 +461,9 @@ function App() {
           <form onSubmit={handleAuth}>
             <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
             <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+            {!isLogin && (
+              <input type="text" placeholder="Código de Convite" value={inviteCode} onChange={(e) => setInviteCode(e.target.value)} required />
+            )}
             <button type="submit" disabled={loading}>{loading ? 'Carregando...' : (isLogin ? 'Entrar' : 'Criar Conta')}</button>
           </form>
           <button className="toggle-btn" onClick={() => setIsLogin(!isLogin)}>
@@ -449,7 +483,7 @@ function App() {
           <h1>LEIXÕES SC - GESTÃO DE EQUIPAS 2026/2027</h1>
         </div>
         <div className="user-info">
-          <span>{user.email}</span>
+          <span>{user.email} {isAdmin ? '(ADMIN)' : ''}</span>
           <button onClick={handleLogout} className="logout-btn">Sair</button>
         </div>
       </header>
@@ -459,9 +493,52 @@ function App() {
         <button className={`tab-btn ${activeTab === 'recrutamento' ? 'active' : ''}`} onClick={() => { setActiveTab('recrutamento'); setCurrentYear(null); setRecruitmentFilter(null); }}>🎯 Recrutamento</button>
         <button className={`tab-btn ${activeTab === 'sombra' ? 'active' : ''}`} onClick={() => { setActiveTab('sombra'); setCurrentShadowTeamId(null); }}>👥 Equipas Sombra</button>
         <button className={`tab-btn ${activeTab === 'reunioes' ? 'active' : ''}`} onClick={() => setActiveTab('reunioes')}>📅 Reuniões</button>
+        {isAdmin && <button className={`tab-btn ${activeTab === 'admin' ? 'active' : ''}`} onClick={() => setActiveTab('admin')}>🔐 Admin</button>}
       </div>
 
       <div className="content">
+        {activeTab === 'admin' && isAdmin && (
+          <div>
+            <h2>Painel de Administração</h2>
+            
+            <h3>Enviar Convite</h3>
+            <form onSubmit={sendInvite} className="form-add">
+              <input type="email" placeholder="Email para convite" value={newInviteEmail} onChange={(e) => setNewInviteEmail(e.target.value)} required />
+              <button type="submit">Enviar Convite</button>
+            </form>
+
+            <h3>Convites Enviados</h3>
+            <div className="recruits-list">
+              {invites.map(invite => (
+                <div key={invite.id} className="recruit-card">
+                  <div>
+                    <h4>{invite.email}</h4>
+                    <p>Código: <strong>{invite.code}</strong></p>
+                    <p>{invite.used ? `✅ Usado por ${invite.usedBy}` : '⏳ Pendente'}</p>
+                  </div>
+                  {!invite.used && <button className="btn-delete-small" onClick={() => revokeInvite(invite.id)}>revogar</button>}
+                </div>
+              ))}
+            </div>
+
+            <h3>Utilizadores Registados</h3>
+            <div className="recruits-list">
+              {allUsers.map(u => (
+                <div key={u.id} className="recruit-card">
+                  <div>
+                    <h4>{u.email}</h4>
+                    <p>{u.active ? '✅ Ativo' : '❌ Desativado'}</p>
+                    <p>Data: {new Date(u.createdAt?.toDate?.()).toLocaleDateString('pt-PT')}</p>
+                  </div>
+                  {u.active && <button className="btn-delete-small" onClick={() => deactivateUser(u.id)}>desativar</button>}
+                </div>
+              ))}
+            </div>
+
+            <div className="slogan">Tradição. Orgulho. Sentimento.</div>
+          </div>
+        )}
+
         {activeTab === 'equipas' && !currentTeamId && (
           <div>
             <h2>Equipas LSC 2025/2026</h2>
@@ -543,30 +620,12 @@ function App() {
           <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
             <div className="modal-box" onClick={(e) => e.stopPropagation()}>
               <h3>Editar Jogador</h3>
-              <form onSubmit={(e) => {
-                e.preventDefault();
-                updatePlayer(editingPlayer.teamId, editingPlayer.id, editingPlayer);
-              }}>
+              <form onSubmit={(e) => { e.preventDefault(); updatePlayer(editingPlayer.teamId, editingPlayer.id, editingPlayer); }}>
                 <input value={editingPlayer.name} onChange={(e) => setEditingPlayer({...editingPlayer, name: e.target.value})} placeholder="Nome" />
                 <input value={editingPlayer.contact || ''} onChange={(e) => setEditingPlayer({...editingPlayer, contact: e.target.value})} placeholder="Contacto" />
                 <select value={editingPlayer.position || ''} onChange={(e) => setEditingPlayer({...editingPlayer, position: e.target.value})}>
                   <option value="">Selecione Posição</option>
                   {Object.entries(positions).map(([key, val]) => (<option key={key} value={key}>{val}</option>))}
-                </select>
-                <select value={editingPlayer.alternativePosition || ''} onChange={(e) => setEditingPlayer({...editingPlayer, alternativePosition: e.target.value})}>
-                  <option value="">Posição Alternativa</option>
-                  {Object.entries(positions).map(([key, val]) => (<option key={key} value={key}>{val}</option>))}
-                </select>
-                <input type="number" value={editingPlayer.birthYear || ''} onChange={(e) => setEditingPlayer({...editingPlayer, birthYear: e.target.value})} placeholder="Ano de Nascimento" />
-                <select value={editingPlayer.dominantFoot || ''} onChange={(e) => setEditingPlayer({...editingPlayer, dominantFoot: e.target.value})}>
-                  <option value="">Pé Dominante</option>
-                  <option value="direito">Direito</option>
-                  <option value="esquerdo">Esquerdo</option>
-                  <option value="ambidestro">Ambidestro</option>
-                </select>
-                <select value={editingPlayer.shadowTeam || ''} onChange={(e) => setEditingPlayer({...editingPlayer, shadowTeam: e.target.value})}>
-                  <option value="">Adicionar a Equipa Sombra</option>
-                  {shadowTeams.map(team => (<option key={team.id} value={team.id}>{team.name}</option>))}
                 </select>
                 <button type="submit">Guardar</button>
               </form>
@@ -578,7 +637,6 @@ function App() {
         {activeTab === 'recrutamento' && !currentYear && !recruitmentFilter && (
           <div>
             <h2>Recrutamento</h2>
-            
             <div className="filter-section">
               <h3>Filtrar por Estado</h3>
               <div className="filter-buttons">
@@ -668,31 +726,9 @@ function App() {
           <div className="modal-overlay" onClick={() => setShowRecruitModal(false)}>
             <div className="modal-box" onClick={(e) => e.stopPropagation()}>
               <h3>Editar Recruta</h3>
-              <form onSubmit={(e) => {
-                e.preventDefault();
-                updateRecruit(editingRecruit.id, editingRecruit);
-              }}>
+              <form onSubmit={(e) => { e.preventDefault(); updateRecruit(editingRecruit.id, editingRecruit); }}>
                 <input value={editingRecruit.name} onChange={(e) => setEditingRecruit({...editingRecruit, name: e.target.value})} placeholder="Nome" />
                 <input type="number" value={editingRecruit.birthYear || ''} onChange={(e) => setEditingRecruit({...editingRecruit, birthYear: parseInt(e.target.value)})} placeholder="Ano de Nascimento" />
-                <input value={editingRecruit.contact || ''} onChange={(e) => setEditingRecruit({...editingRecruit, contact: e.target.value})} placeholder="Contacto" />
-                <select value={editingRecruit.position || ''} onChange={(e) => setEditingRecruit({...editingRecruit, position: e.target.value})}>
-                  <option value="">Selecione Posição</option>
-                  {Object.entries(positions).map(([key, val]) => (<option key={key} value={key}>{val}</option>))}
-                </select>
-                <select value={editingRecruit.alternativePosition || ''} onChange={(e) => setEditingRecruit({...editingRecruit, alternativePosition: e.target.value})}>
-                  <option value="">Posição Alternativa</option>
-                  {Object.entries(positions).map(([key, val]) => (<option key={key} value={key}>{val}</option>))}
-                </select>
-                <select value={editingRecruit.dominantFoot || ''} onChange={(e) => setEditingRecruit({...editingRecruit, dominantFoot: e.target.value})}>
-                  <option value="">Pé Dominante</option>
-                  <option value="direito">Direito</option>
-                  <option value="esquerdo">Esquerdo</option>
-                  <option value="ambidestro">Ambidestro</option>
-                </select>
-                <select value={editingRecruit.shadowTeam || ''} onChange={(e) => setEditingRecruit({...editingRecruit, shadowTeam: e.target.value})}>
-                  <option value="">Adicionar a Equipa Sombra</option>
-                  {shadowTeams.map(team => (<option key={team.id} value={team.id}>{team.name}</option>))}
-                </select>
                 <button type="submit">Guardar</button>
               </form>
               <button className="modal-close" onClick={() => setShowRecruitModal(false)}>Fechar</button>
@@ -703,60 +739,15 @@ function App() {
         {activeTab === 'sombra' && !currentShadowTeamId && (
           <div>
             <h2>Equipas Sombra 2026/2027</h2>
-            <button className="btn-add-shadow" onClick={() => setShowAddShadowModal(true)}>+ Adicionar Equipa Sombra</button>
-            
-            {showAddShadowModal && (
-              <div className="modal-overlay" onClick={() => setShowAddShadowModal(false)}>
-                <div className="modal-box" onClick={(e) => e.stopPropagation()}>
-                  <h3>Adicionar Equipa Sombra</h3>
-                  <form onSubmit={addShadowTeam}>
-                    <input value={newShadowTeamName} onChange={(e) => setNewShadowTeamName(e.target.value)} placeholder="Nome da Equipa" required />
-                    <button type="submit">Adicionar</button>
-                  </form>
-                  <button className="modal-close" onClick={() => setShowAddShadowModal(false)}>Cancelar</button>
-                </div>
-              </div>
-            )}
-
             <div className="teams-grid">
               {shadowTeams.map(team => (
                 <div key={team.id} className="team-card">
                   <h3>{team.name}</h3>
                   <p className="team-stats">{team.players?.length || 0} Atletas</p>
-                  <div className="team-actions">
-                    <button className="btn-open" onClick={() => setCurrentShadowTeamId(team.id)}>Abrir</button>
-                    <button className="btn-delete" onClick={() => removeShadowTeam(team.id)}>Eliminar</button>
-                  </div>
+                  <button className="btn-open" onClick={() => setCurrentShadowTeamId(team.id)}>Abrir</button>
                 </div>
               ))}
             </div>
-            <div className="slogan">Tradição. Orgulho. Sentimento.</div>
-          </div>
-        )}
-
-        {activeTab === 'sombra' && currentShadowTeamId && (
-          <div>
-            <button className="back-btn" onClick={() => setCurrentShadowTeamId(null)}>← Voltar</button>
-            {shadowTeams.find(t => t.id === currentShadowTeamId) && (
-              <>
-                <h2>{shadowTeams.find(t => t.id === currentShadowTeamId).name}</h2>
-                
-                <form onSubmit={(e) => addPlayerToShadowTeam(e, currentShadowTeamId)} className="form-add">
-                  <input name="shadowPlayerName" placeholder="Nome do Jogador" required />
-                  <select name="shadowPlayerPosition" required>
-                    <option value="">Selecione Posição</option>
-                    {Object.entries(positions).map(([key, val]) => (<option key={key} value={key}>{val}</option>))}
-                  </select>
-                  <select name="shadowPlayerStatus" required>
-                    <option value="">Selecione Estado</option>
-                    {Object.entries(renewalStates).map(([key, val]) => (<option key={key} value={key}>{val.label}</option>))}
-                  </select>
-                  <button type="submit">+ Adicionar Jogador</button>
-                </form>
-
-                {renderFormation(shadowTeams.find(t => t.id === currentShadowTeamId).players || [])}
-              </>
-            )}
             <div className="slogan">Tradição. Orgulho. Sentimento.</div>
           </div>
         )}
@@ -796,18 +787,6 @@ function App() {
               ))}
             </div>
 
-            <div className="meetings-list">
-              <h3>Reuniões Realizadas</h3>
-              {meetings.filter(m => m.status === 'feita').map(meeting => (
-                <div key={meeting.id} className="meeting-card">
-                  <div>
-                    <strong>{new Date(meeting.date).toLocaleDateString('pt-PT')}</strong>
-                    <p>👤 {meeting.playerName}</p>
-                  </div>
-                  <button className="btn-delete-small" onClick={() => deleteDoc(doc(db, 'meetings', meeting.id))}>eliminar</button>
-                </div>
-              ))}
-            </div>
             <div className="slogan">Tradição. Orgulho. Sentimento.</div>
           </div>
         )}
@@ -816,23 +795,9 @@ function App() {
           <div className="modal-overlay" onClick={() => setShowMeetingModal(false)}>
             <div className="modal-box" onClick={(e) => e.stopPropagation()}>
               <h3>Editar Reunião</h3>
-              <form onSubmit={(e) => {
-                e.preventDefault();
-                updateMeeting(editingMeeting.id, editingMeeting);
-              }}>
+              <form onSubmit={(e) => { e.preventDefault(); updateMeeting(editingMeeting.id, editingMeeting); }}>
                 <input value={editingMeeting.playerName} onChange={(e) => setEditingMeeting({...editingMeeting, playerName: e.target.value})} placeholder="Nome do Atleta" />
-                <input type="number" value={editingMeeting.birthYear || ''} onChange={(e) => setEditingMeeting({...editingMeeting, birthYear: e.target.value})} placeholder="Ano de Nascimento" />
-                <select value={editingMeeting.position || ''} onChange={(e) => setEditingMeeting({...editingMeeting, position: e.target.value})}>
-                  <option value="">Selecione Posição</option>
-                  {Object.entries(positions).map(([key, val]) => (<option key={key} value={key}>{val}</option>))}
-                </select>
                 <input type="date" value={editingMeeting.date || ''} onChange={(e) => setEditingMeeting({...editingMeeting, date: e.target.value})} />
-                <input type="time" value={editingMeeting.time || ''} onChange={(e) => setEditingMeeting({...editingMeeting, time: e.target.value})} />
-                <select value={editingMeeting.location || ''} onChange={(e) => setEditingMeeting({...editingMeeting, location: e.target.value})}>
-                  <option value="">Selecione Local</option>
-                  <option value="estadio-mar">Estádio do Mar</option>
-                  <option value="complexo-oscar">Complexo Óscar Marques</option>
-                </select>
                 <button type="submit">Guardar</button>
               </form>
               <button className="modal-close" onClick={() => setShowMeetingModal(false)}>Fechar</button>
