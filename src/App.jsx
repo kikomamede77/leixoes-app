@@ -749,6 +749,10 @@ function App() {
                   <option value="">Selecione Posição</option>
                   {Object.entries(positions).map(([key, val]) => (<option key={key} value={key}>{val}</option>))}
                 </select>
+                <select value={editingPlayer.shadowTeam || ''} onChange={(e) => setEditingPlayer({...editingPlayer, shadowTeam: e.target.value})}>
+                  <option value="">Selecione Equipa Sombra (opcional)</option>
+                  {shadowTeams.map(team => (<option key={team.id} value={team.id}>{team.name}</option>))}
+                </select>
                 <button type="submit">Guardar</button>
               </form>
               <button className="modal-close" onClick={() => setShowEditModal(false)}>Fechar</button>
@@ -857,6 +861,10 @@ function App() {
                 </select>
                 <input value={editingRecruit.contact || ''} onChange={(e) => setEditingRecruit({...editingRecruit, contact: e.target.value})} placeholder="Contacto" />
                 <textarea value={editingRecruit.notes || ''} onChange={(e) => setEditingRecruit({...editingRecruit, notes: e.target.value})} placeholder="Notas" rows="3"></textarea>
+                <select value={editingRecruit.shadowTeam || ''} onChange={(e) => setEditingRecruit({...editingRecruit, shadowTeam: e.target.value})}>
+                  <option value="">Selecione Equipa Sombra (opcional)</option>
+                  {shadowTeams.map(team => (<option key={team.id} value={team.id}>{team.name}</option>))}
+                </select>
                 <button type="submit">Guardar</button>
               </form>
               <button className="modal-close" onClick={() => setShowRecruitModal(false)}>Fechar</button>
