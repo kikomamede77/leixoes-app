@@ -715,21 +715,24 @@ function App() {
                   <button type="submit">+ Adicionar Jogador</button>
                 </form>
 
-                {renderFormation(teams.find(t => t.id === currentTeamId).players || [])}
-
-                <div className="players-compact">
-                  <h3>Lista de Jogadores</h3>
-                  <div className="compact-list">
-                    {(teams.find(t => t.id === currentTeamId).players || []).map(player => (
-                      <div key={player.id} className="compact-card" onClick={() => { setEditingPlayer({...player, teamId: currentTeamId}); setShowEditModal(true); }} style={{cursor: 'pointer'}}>
-                        <div>
-                          <p><strong>{player.name}</strong></p>
-                          <p className="compact-text">{positions[player.position]}</p>
-                          <span className="status-badge" style={{background: renewalStates[player.status]?.color}}>{renewalStates[player.status]?.label}</span>
+                <div className="formation-players-wrapper">
+                  <div className="formation-side">
+                    {renderFormation(teams.find(t => t.id === currentTeamId).players || [])}
+                  </div>
+                  <div className="players-side">
+                    <h3>Lista de Jogadores</h3>
+                    <div className="players-list-vertical">
+                      {(teams.find(t => t.id === currentTeamId).players || []).map(player => (
+                        <div key={player.id} className="player-list-item" onClick={() => { setEditingPlayer({...player, teamId: currentTeamId}); setShowEditModal(true); }} style={{cursor: 'pointer'}}>
+                          <div className="player-info">
+                            <p className="player-name">{player.name}</p>
+                            <p className="player-position">{positions[player.position]}</p>
+                            <span className="status-badge" style={{background: renewalStates[player.status]?.color}}>{renewalStates[player.status]?.label}</span>
+                          </div>
+                          <button className="btn-small btn-danger" onClick={(e) => { e.stopPropagation(); deletePlayer(currentTeamId, player.id); }}>✕</button>
                         </div>
-                        <button className="btn-small btn-danger" onClick={(e) => { e.stopPropagation(); deletePlayer(currentTeamId, player.id); }}>✕</button>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
                 </div>
               </>
